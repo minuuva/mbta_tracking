@@ -1,0 +1,29 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mbta-delay-tracker
+  namespace: default
+spec:
+  schedule: "*/30 * * * *"          # runs every 30 minutes
+  concurrencyPolicy: Forbid         # skip a run if the previous one is still going
+  successfulJobsHistoryLimit: 10
+  failedJobsHistoryLimit: 10
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: mbta-delay
+              image: ghcr.io/minuuva/mbta-delay:latest
+              imagePullPolicy: Always
+              env:
+                - name: DYNAMODB_TABLE
+                  value: "mbta-tracking"
+                - name: S3_BUCKET
+                  value: "mbtav3"
+                - name: API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: mbta-api-secret
+                      key: API_KEY
