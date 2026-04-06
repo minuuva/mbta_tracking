@@ -41,3 +41,25 @@ mbta-delay/          # containerized application
   requirements.txt
 mbta-job.yaml        # Kubernetes CronJob manifest
 ```
+
+## Canvas Quiz
+
+**1. Which data source you chose and why.**
+
+I chose the MBTA V3 API, which provides real-time predictions and schedules for Boston's transit system. I selected it because it directly relates to transportation engineering, which is an interest of mine. Specifically, I'm tracking prediction delay (the difference between predicted and scheduled arrival times) on the Orange Line at Downtown Crossing. The API is well-documented, returns JSON, offers a free API key with generous rate limits (1,000 requests/minute), and updates continuously during service hours, making it ideal for a scheduled data pipeline collecting every 30 minutes.
+
+**2. What you observe in the data — any patterns, spikes, or surprises over the 72-hour window.**
+
+Over the 72-hour window, a few clear patterns emerged. On 04/03, delays were mostly positive (trains arriving 1–4 minutes late), which aligns with typical weekday service under normal load. However, starting around 04/04 midday, the delay values shifted sharply negative, reaching as low as -11 minutes, meaning trains were predicted to arrive significantly earlier than scheduled. This is surprising and likely indicates schedule adjustments, short-turns, or trains running ahead of timetable during lighter ridership periods. The overnight gaps (roughly 1–5 AM ET each night) are visible as breaks in the line where no service was running. One notable spike occurred on the evening of 04/05 with a drop to nearly -12 minutes, suggesting an unusual service deviation. Overall, the data reveals that the Orange Line does not simply run "late"; it oscillates between early and late, with the magnitude of early arrivals being larger than expected.
+
+**3. How Kubernetes Secrets differ from plain environment variables and why that distinction matters.**
+
+Plain environment variables are defined in cleartext directly in the CronJob YAML file. This means anyone with access to the manifest can read them. Kubernetes Secrets are stored separately and are base64-encoded at rest. They are injected into the pod at runtime and referenced by name in the YAML, so the actual sensitive value never appears in any file on disk, in version control, or in the container image. This matters because API keys, passwords, and tokens should never be exposed in source code or configuration files where they could be leaked or accidentally committed.
+
+**4. How your CronJob pods gain permission to read/write to AWS services without credentials appearing in any file.**
+
+The EC2 instance has an IAM role (dp2-mbta-ec2-role) attached to it as an instance profile. When a pod runs on that instance, the AWS SDK (boto3) automatically discovers temporary credentials from the EC2 instance metadata service (IMDS) via the attached role. These credentials are short-lived, automatically rotated, and never written to any file: no access keys or secret keys appear in the YAML, Docker image, or Python code. The pod logs confirm this with the line Found credentials from IAM Role: dp2-mbta-ec2-role.
+
+**5. One thing you would do differently if you were building this pipeline for a real production system.**
+
+I would add monitoring and alerting. For example, I would integrate with CloudWatch to notify the team when a CronJob pod fails, when DynamoDB writes an error out, or when no data has been collected for an unexpected period. The current pipeline fails silently; in production, you need to know immediately when the pipeline breaks so you can respond before data gaps grow too large. I would also set up a CI/CD pipeline to automatically build and push the container image on each commit, rather than building and pushing manually.
